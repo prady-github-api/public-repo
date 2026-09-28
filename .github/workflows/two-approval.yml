@@ -1,0 +1,61 @@
+name: Two Approval Demo
+
+# Test workflow for sgh: workflow_dispatch inputs plus two sequential manual
+# approval gates. Each gate is a separate environment with required reviewers.
+on:
+  workflow_dispatch:
+    inputs:
+      target:
+        description: Deployment target
+        type: choice
+        options: [dev, staging, prod]
+        default: dev
+      dry_run:
+        description: Skip the real deploy step
+        type: boolean
+        default: true
+      message:
+        description: Free-text note shown in the run title
+        type: string
+        default: ""
+  pull_request:
+
+run-name: Two Approval Demo -> ${{ inputs.target || 'pr-check' }} (dry_run=${{ inputs.dry_run }})
+
+permissions:
+  contents: read
+
+jobs:
+  Build:
+    name: Build
+    runs-on: ubuntu-latest
+    steps:
+      - run: |
+          echo "target=${{ inputs.target }} dry_run=${{ inputs.dry_run }} message=${{ inputs.message }}"
+
+  approval-1:
+    name: Approval 1
+    if: github.event_name == 'workflow_dispatch'
+    needs: Build
+    runs-on: ubuntu-latest
+    environment: approval-1
+    steps:
+      - run: echo "First approval granted"
+
+  approval-2:
+    name: Approval 2
+    if: github.event_name == 'workflow_dispatch'
+    needs: approval-1
+    runs-on: ubuntu-latest
+    environment: approval-2
+    steps:
+      - run: echo "Second approval granted"
+
+  deploy:
+    name: Deploy
+    if: github.event_name == 'workflow_dispatch'
+    needs: approval-2
+    runs-on: ubuntu-latest
+    steps:
+      - run: |
+          if [ "${{ inputs.dry_run }}" = "true" ]; then echo "dry run: skipping deploy to ${{ inputs.target }}"; else echo "deploying to ${{ inputs.target }}"; fi
